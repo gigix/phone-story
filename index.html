@@ -16,7 +16,7 @@
 <body style="background-color: black;">
 <script>
     var SPRITE_NONE = 0;
-    var SPRITE_RACER = 1;
+    var SPRITE_CHARACTER = 1;
     var SPRITE_OTHER = 2;
 
     var Q = Quintus()
@@ -24,19 +24,165 @@
             .setup({
                 width: 320,
                 height: 480
-            }).touch();
+            }).touch(SPRITE_CHARACTER);
 
-    Q.load("sprites.png, sprites.json, level_collision.json, level_background.json, tiles.png", function() {
-        Q.sheet("tiles","tiles.png", { tilew: 32, tileh: 32 });
-        Q.compileSheets("sprites.png","sprites.json");
+    Q.load("sprites.png, sprites.json, level_collision.json, level_background.json, tiles.png", function () {
+        Q.sheet("tiles", "tiles.png", {tilew: 32, tileh: 32});
+        Q.compileSheets("sprites.png", "sprites.json");
 
         //stage our scene here
         Q.stageScene("level1");
     });
 
-    Q.scene("level1",function(stage) {
-        stage.collisionLayer(new Q.TileLayer({ dataAsset: 'level_collision.json', sheet: 'tiles', type: SPRITE_OTHER }));
-        stage.insert(new Q.TileLayer({ dataAsset: 'level_background.json', sheet: 'tiles', type: SPRITE_NONE }));
+    Q.Sprite.extend("Slave", {
+        init: function (p) {
+            this._super(p, {
+                sheet: "player",
+                type: SPRITE_CHARACTER,
+                collisionMask: SPRITE_OTHER,
+                gravity: 0,
+                fatigue: 0,
+                status: 'working'
+            });
+            this.add('2d');
+        },
+
+        update: function () {
+            if (Q.state.get('status') != 'playing') {
+                return;
+            }
+
+            if (Math.random() * this.p.fatigue++ > 200) {
+                this.rest();
+            }
+        },
+
+        rest: function () {
+            this.p.sheet = 'girl';
+            this.p.status = 'resting';
+        },
+
+        isResting: function () {
+            return this.p.status == 'resting';
+        },
+
+        getBusy: function () {
+            this.p.fatigue = 0;
+            this.p.sheet = 'player';
+            this.p.status = 'working';
+        }
+    });
+
+    Q.Sprite.extend("Soldier", {
+        init: function (p) {
+            this._super(p, {
+                sheet: "greenrival",
+                type: SPRITE_CHARACTER,
+                collisionMask: SPRITE_OTHER,
+                gravity: 0
+            });
+            this.add('2d');
+            this.on("drag");
+            this.on('touchEnd');
+        },
+
+        drag: function (touch) {
+            if (Q.state.get('status') != 'playing') {
+                return;
+            }
+
+            this.p.y = touch.origY + touch.dy;
+        },
+
+        touchEnd: function () {
+            if (Q.state.get('status') != 'playing') {
+                return;
+            }
+
+            var soldier = this;
+            this.p.slaves.forEach(function (slave) {
+                if (soldier.isLookingAt(slave) && slave.isResting()) {
+                    soldier.hit(slave);
+                }
+            });
+        },
+
+        hit: function (slave) {
+            slave.getBusy();
+            this.stage.score();
+        },
+
+        isLookingAt: function (slave) {
+            return Math.abs(this.p.y - slave.p.y) < 8;
+        }
+    });
+
+    Q.UI.Text.extend("ScoreBoard", {
+        init: function () {
+            this._super({
+                label: "Score: 0",
+                x: 260,
+                y: 360,
+                color: 'white'
+            });
+
+            Q.state.on("change.score", this, "score");
+        },
+
+        score: function (score) {
+            this.p.label = "Score: " + score;
+        }
+    });
+
+    Q.scene("level1", function (stage) {
+        Q.state.reset({score: 0, status: 'playing'});
+
+        stage.score = function () {
+            Q.state.inc("score", 1);
+            if (Q.state.get('score') >= 2) {
+                stage.finish();
+            }
+        };
+
+        stage.finish = function () {
+            Q.state.set('status', 'finished');
+
+            var container = this.insert(new Q.UI.Container({
+                fill: "gray",
+                border: 5,
+                shadow: 10,
+                shadowColor: "rgba(0,0,0,0.5)",
+                y: 50,
+                x: Q.width / 2
+            }));
+            this.insert(new Q.UI.Text({
+                label: "You Win!",
+                color: "white",
+                x: 0,
+                y: 0
+            }), container);
+            container.fit(20, 20);
+        };
+
+        stage.insert(new Q.TileLayer({dataAsset: 'level_background.json', sheet: 'tiles', type: SPRITE_NONE}));
+
+        var leftSlaves = [];
+        for (var i = 0; i < 4; i++) {
+            var yValue = 64 * (i + 1);
+            var slave = stage.insert(new Q.Slave({x: 112, y: yValue}));
+            leftSlaves.push(slave);
+        }
+        stage.insert(new Q.Soldier({x: 64, y: 64, slaves: leftSlaves, stage: stage}));
+
+        var rightSlaves = [];
+        for (var i = 0; i < 4; i++) {
+            var yValue = 64 * (i + 1);
+            var slave = stage.insert(new Q.Slave({x: 208, y: yValue, flip: 'x'}));
+            rightSlaves.push(slave);
+        }
+        stage.insert(new Q.Soldier({x: 256, y: 64, flip: 'x', slaves: rightSlaves, stage: stage}));
+
+        stage.insert(new Q.ScoreBoard({}));
     });
 
 </script>
