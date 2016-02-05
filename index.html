@@ -155,7 +155,7 @@
     });
 
     Q.scene("level1", function (stage) {
-        Q.state.reset({score: 0, status: 'playing', startedAt: new Date(), timeLimit: 30, expectedScore: 10});
+        Q.state.reset({score: 0, status: 'playing', startedAt: new Date(), timeLimit: 60, expectedScore: 10});
         Q.state.set('timeRemaining', Q.state.get('timeLimit'));
 
         stage.score = function () {
