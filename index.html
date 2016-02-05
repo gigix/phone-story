@@ -55,6 +55,9 @@
             if (Math.random() * this.p.fatigue++ > 200) {
                 this.rest();
             }
+
+            // This should be in stage, not sprite
+            Q.stage().updateTime();
         },
 
         rest: function () {
@@ -120,7 +123,7 @@
     Q.UI.Text.extend("ScoreBoard", {
         init: function () {
             this._super({
-                label: "Score: 0",
+                label: "Score: " + Q.state.get('score'),
                 x: 260,
                 y: 360,
                 color: 'white'
@@ -134,17 +137,48 @@
         }
     });
 
+    Q.UI.Text.extend("TimeBoard", {
+        init: function () {
+            this._super({
+                label: " ",
+                x: 260,
+                y: 400,
+                color: 'white'
+            });
+
+            Q.state.on("change.timeRemaining", this, "updateTime");
+        },
+
+        updateTime: function (timeRemaining) {
+            this.p.label = "Time: " + Math.floor(timeRemaining);
+        }
+    });
+
     Q.scene("level1", function (stage) {
-        Q.state.reset({score: 0, status: 'playing'});
+        Q.state.reset({score: 0, status: 'playing', startedAt: new Date(), timeLimit: 30, expectedScore: 10});
+        Q.state.set('timeRemaining', Q.state.get('timeLimit'));
 
         stage.score = function () {
             Q.state.inc("score", 1);
-            if (Q.state.get('score') >= 2) {
-                stage.finish();
+            if (Q.state.get('score') >= Q.state.get('expectedScore')) {
+                stage.finish(true);
             }
         };
 
-        stage.finish = function () {
+        stage.updateTime = function () {
+            var timeSpent = (new Date().getTime() - Q.state.get('startedAt').getTime()) / 1000;
+            var timeLimit = Q.state.get('timeLimit');
+            var timeRemaining = timeLimit - timeSpent;
+
+            if (timeRemaining < 0) {
+                stage.finish(false);
+                return;
+            }
+
+            Q.state.set('timeRemaining', timeRemaining);
+        };
+
+        stage.finish = function (isWin) {
             Q.state.set('status', 'finished');
 
             var container = this.insert(new Q.UI.Container({
@@ -156,7 +190,7 @@
                 x: Q.width / 2
             }));
             this.insert(new Q.UI.Text({
-                label: "You Win!",
+                label: isWin ? "You Win!" : "You Lost...",
                 color: "white",
                 x: 0,
                 y: 0
@@ -183,6 +217,7 @@
         stage.insert(new Q.Soldier({x: 256, y: 64, flip: 'x', slaves: rightSlaves, stage: stage}));
 
         stage.insert(new Q.ScoreBoard({}));
+        stage.insert(new Q.TimeBoard({}));
     });
 
 </script>
